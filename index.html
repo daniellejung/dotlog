@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Dot Log — Local PWA</title>
+<meta name="theme-color" content="#0ea5e9">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root{
+    --bg:#f7fbff; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --grid:#e2e8f0;
+    --accent:#0ea5e9; --danger:#ef4444;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b1220; --card:#0f172a; --ink:#e2e8f0; --muted:#94a3b8; --grid:#1f2937;
+      --accent:#38bdf8; --danger:#ef4444;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji";}
+  .safe{padding: max(env(safe-area-inset-top),12px) 12px max(env(safe-area-inset-bottom),16px);}
+  header{position:sticky;top:0;z-index:10;background:linear-gradient(var(--card), color-mix(in oklab, var(--card) 70%, transparent) 70%, transparent);
+    backdrop-filter: blur(8px); border-bottom:1px solid var(--grid);}
+  h1{font-size:18px;margin:0 0 8px 0}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .controls input[type="month"]{border:1px solid var(--grid);border-radius:10px;padding:8px 10px;background:var(--card);color:var(--ink)}
+  button{border:1px solid var(--grid);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 10px;font-weight:600}
+  .primary{background:var(--accent);color:#001827;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--grid);border-radius:14px;padding:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px}
+  .legend-item{display:flex;align-items:center;gap:8px;border:1px dashed var(--grid);border-radius:999px;padding:6px 10px;background:var(--card)}
+  .dot{width:12px;height:12px;border-radius:50%;border:1px solid #0001}
+  .calendar{width:100%;border-collapse:collapse}
+  .calendar th,.calendar td{border:1px solid var(--grid);padding:8px;vertical-align:top;min-width:46px;height:60px;background:var(--card);position:relative}
+  .calendar th{background:color-mix(in oklab, var(--card), white 6%);font-size:12px}
+  .daynum{position:absolute;top:6px;right:8px;color:var(--muted);font-size:11px}
+  .muted{color:var(--muted)}
+  .spill{background:color-mix(in oklab, var(--card), black 4%)}
+  .dots{display:grid;grid-template-columns: repeat(3, 14px);gap:6px;margin-top:18px;align-content:start}
+  .tools{display:flex;gap:8px;flex-wrap:wrap}
+  .tip{font-size:12px;color:var(--muted)}
+  .hidden{display:none}
+  .sheet{position:fixed;left:0;right:0;bottom:-100%;background:var(--card);border-top-left-radius:16px;border-top-right-radius:16px;
+    box-shadow:0 -8px 24px rgba(0,0,0,.18);padding:12px;border:1px solid var(--grid);transition:bottom .25s ease}
+  .sheet.open{bottom:0}
+  .sheet h3{margin:0 0 8px 0;font-size:16px}
+  select{border:1px solid var(--grid);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card);color:var(--ink)}
+  .grid{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+  .danger{color:#fff;background:var(--danger);border-color:var(--danger)}
+  @media (max-width:430px){
+    .calendar th,.calendar td{min-width:40px;height:56px;padding:6px}
+    .dots{grid-template-columns: repeat(3, 12px); gap:5px; margin-top:14px}
+  }
+</style>
+</head>
+<body>
+<header class="safe">
+  <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <div>
+      <h1>Dot Log</h1>
+      <div class="tip">Local only · PWA · Sunday first</div>
+    </div>
+    <div class="controls row">
+      <button id="prevBtn">◀︎</button>
+      <input id="monthPicker" type="month">
+      <button id="nextBtn">▶︎</button>
+    </div>
+  </div>
+  <div class="tools" style="margin-top:8px">
+    <button id="addHabitBtn" class="primary">Add habit</button>
+    <button id="exportBtn">Backup JSON</button>
+    <button id="importBtn">Import JSON</button>
+    <button id="widgetBtn">Export for Widget</button>
+    <button id="clearBtn" class="danger">Clear all</button>
+  </div>
+</header>
+
+<main class="safe" style="padding-top:12px">
+  <section class="card">
+    <h2 style="font-size:16px;margin:0 0 8px 0">Habits</h2>
+    <div id="legend" class="legend"></div>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="font-size:16px;margin:0">Calendar</h2>
+      <div class="tip">Tap a day to add via dropdown</div>
+    </div>
+    <table id="calendar" class="calendar"></table>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <h2 style="font-size:16px;margin:0 0 6px 0">Stats (this month)</h2>
+    <div id="stats" class="tip">No data yet.</div>
+  </section>
+</main>
+
+<div id="sheet" class="sheet" aria-hidden="true">
+  <h3 id="sheetTitle">Add entry</h3>
+  <div class="grid">
+    <label for="selHabit">Habit</label>
+    <select id="selHabit"></select>
+  </div>
+  <div class="grid" style="margin-top:8px">
+    <label for="selCount">Count</label>
+    <select id="selCount">
+      <option value="1">1 time</option>
+      <option value="2">2 times</option>
+      <option value="3">3 times</option>
+    </select>
+  </div>
+  <div class="row" style="margin-top:12px;justify-content:flex-end">
+    <button id="removeBtn">Remove last</button>
+    <button id="addBtn" class="primary">Add</button>
+  </div>
+</div>
+
+<input id="fileInput" type="file" accept="application/json" class="hidden"/>
+
+<script>
+const $ = (s, r=document)=>r.querySelector(s);
+const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+const pad = n => String(n).padStart(2,'0');
+
+const store = {
+  key: 'dotlog-local-v3',
+  read(){
+    try{ return JSON.parse(localStorage.getItem(this.key)) || {habits:[], entries:{}} }catch(_){ return {habits:[], entries:{}} }
+  },
+  write(data){ localStorage.setItem(this.key, JSON.stringify(data)); },
+  clear(){ localStorage.removeItem(this.key); }
+}
+let data = store.read();
+
+const monthPicker = $('#monthPicker');
+const cal = $('#calendar');
+const legend = $('#legend');
+const statsBox = $('#stats');
+const sheet = $('#sheet');
+const selHabit = $('#selHabit');
+const selCount = $('#selCount');
+const addHabitBtn = $('#addHabitBtn');
+const addBtn = $('#addBtn');
+const removeBtn = $('#removeBtn');
+const fileInput = $('#fileInput');
+
+const today = new Date();
+monthPicker.value = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
+
+function uuid(){ return 'h'+Math.random().toString(36).slice(2,10); }
+function addHabit(name, color){
+  data.habits.push({ id:uuid(), name, color, created:Date.now() });
+  store.write(data); renderLegend(); renderCalendar(); renderStats();
+}
+function deleteHabit(id){
+  for(const d of Object.keys(data.entries)){
+    data.entries[d] = (data.entries[d]||[]).filter(h=>h!==id);
+    if(data.entries[d].length===0) delete data.entries[d];
+  }
+  data.habits = data.habits.filter(h=>h.id!==id);
+  store.write(data); renderLegend(); renderCalendar(); renderStats();
+}
+
+function addEntry(date, habitId, count){
+  const arr = data.entries[date] || [];
+  for(let i=0;i<count;i++) arr.push(habitId);
+  data.entries[date] = arr;
+  store.write(data);
+}
+function removeLast(date){
+  const arr = data.entries[date] || [];
+  arr.pop();
+  if(arr.length===0) delete data.entries[date]; else data.entries[date] = arr;
+  store.write(data);
+}
+
+function escapeHtml(str){return str.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
+function renderLegend(){
+  legend.innerHTML = '';
+  if(!data.habits.length){ legend.innerHTML = '<div class="tip">No habits yet. Tap "Add habit".</div>'; return; }
+  for(const h of data.habits){
+    const el = document.createElement('div');
+    el.className = 'legend-item';
+    el.innerHTML = `<span class="dot" style="background:${h.color}"></span><span>${escapeHtml(h.name)}</span>`;
+    const del = document.createElement('button');
+    del.textContent = 'Delete';
+    del.onclick = ()=>{ if(confirm('Delete this habit?')) deleteHabit(h.id); };
+    el.appendChild(del);
+    legend.appendChild(el);
+  }
+}
+
+function ymd(d){ return d.toISOString().slice(0,10); }
+function monthGrid(year, month){ // month: 1..12
+  const first = new Date(year, month-1, 1);
+  const last = new Date(year, month, 0);
+  const start = new Date(first); start.setDate(first.getDate() - first.getDay()); // Sunday
+  const end = new Date(last);   end.setDate(last.getDate() + (6 - last.getDay())); // Saturday
+  const weeks = []; let d = new Date(start);
+  while(d <= end){
+    const row = [];
+    for(let i=0;i<7;i++){ row.push(new Date(d)); d.setDate(d.getDate()+1); }
+    weeks.push(row);
+  }
+  return {weeks, first, last};
+}
+
+function renderCalendar(){
+  const [y,m] = monthPicker.value.split('-').map(Number);
+  const {weeks} = monthGrid(y,m);
+  const thead = `<thead><tr><th>SUN</th><th>MON</th><th>TUE</th><th>WED</th><th>THU</th><th>FRI</th><th>SAT</th></tr></thead>`;
+  const rows = weeks.map(week=>{
+    const tds = week.map(d=>{
+      const inMonth = (d.getMonth()+1)===m;
+      const dateStr = ymd(d);
+      const arr = data.entries[dateStr] || [];
+      const dots = arr.map(hid=>{
+        const h = data.habits.find(x=>x.id===hid);
+        const color = h ? h.color : '#ddd';
+        return `<span class="dot" title="${escapeHtml(h? h.name:'')}" style="background:${color}"></span>`;
+      }).join('');
+      return `<td class="${inMonth? '':'spill'}" data-date="${dateStr}">
+        <span class="daynum ${inMonth?'':'muted'}">${d.getDate()}</span>
+        <div class="dots">${dots}</div>
+      </td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  cal.innerHTML = thead + `<tbody>${rows}</tbody>`;
+  $$('#calendar td').forEach(td=>{ td.onclick = ()=>openSheet(td.getAttribute('data-date')); });
+}
+
+let currentDate = null;
+function openSheet(dateStr){
+  currentDate = dateStr;
+  $('#sheetTitle').textContent = `Add entry — ${dateStr}`;
+  selHabit.innerHTML = data.habits.map(h=>`<option value="${h.id}">${escapeHtml(h.name)}</option>`).join('');
+  if(!data.habits.length){
+    selHabit.innerHTML = `<option disabled>(add a habit first)</option>`;
+  }
+  sheet.classList.add('open'); sheet.setAttribute('aria-hidden','false');
+}
+function closeSheet(){ sheet.classList.remove('open'); sheet.setAttribute('aria-hidden','true'); }
+
+addBtn.onclick = ()=>{
+  if(!data.habits.length){ alert('Add a habit first.'); return; }
+  addEntry(currentDate, selHabit.value, Number(selCount.value));
+  renderCalendar(); renderStats(); closeSheet();
+};
+removeBtn.onclick = ()=>{ removeLast(currentDate); renderCalendar(); renderStats(); };
+
+let startY=null;
+sheet.addEventListener('touchstart',e=>{ startY = e.touches[0].clientY; });
+sheet.addEventListener('touchmove',e=>{ if(startY!==null){ const dy=e.touches[0].clientY-startY; if(dy>30){ closeSheet(); startY=null; } } });
+
+function renderStats(){
+  const [y,m] = monthPicker.value.split('-').map(Number);
+  const monthPrefix = `${y}-${pad(m)}-`;
+  const countsByHabit = Object.fromEntries(data.habits.map(h=>[h.id,0]));
+  let activeDays = new Set();
+  for(const [date, arr] of Object.entries(data.entries)){
+    if(date.startsWith(monthPrefix)){
+      arr.forEach(hid => countsByHabit[hid]=(countsByHabit[hid]||0)+1);
+      if(arr.length) activeDays.add(date);
+    }
+  }
+  const totalActiveDays = activeDays.size;
+  const lines = data.habits.map(h=>`• ${h.name}: ${countsByHabit[h.id]||0}`);
+  const totalDots = Object.entries(data.entries).filter(([d,_])=>d.startsWith(monthPrefix)).reduce((a,[_,arr])=>a+arr.length,0);
+  statsBox.innerHTML = lines.length? (`<div>${lines.join('<br>')}</div><div class="tip" style="margin-top:6px">Days active: ${totalActiveDays} · Total dots: ${totalDots}</div>`) : 'No data yet.';
+}
+
+addHabitBtn.onclick = ()=>{
+  const name = prompt('Habit name (e.g., Workout)'); if(!name) return;
+  const color = prompt('Color (hex like #22c55e)', '#22c55e') || '#22c55e';
+  addHabit(name.trim(), color.trim());
+};
+
+$('#exportBtn').onclick = ()=>{
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `dotlog-backup-${Date.now()}.json`; a.click(); URL.revokeObjectURL(a.href);
+};
+$('#importBtn').onclick = ()=> fileInput.click();
+fileInput.onchange = async (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const text = await f.text();
+  try{ const obj = JSON.parse(text);
+    if(obj && obj.habits && obj.entries){ data = obj; store.write(data); renderLegend(); renderCalendar(); renderStats(); alert('Imported.'); }
+    else alert('Invalid file.');
+  }catch(err){ alert('Invalid JSON.'); }
+};
+$('#widgetBtn').onclick = ()=>{
+  const [y,m] = monthPicker.value.split('-').map(Number);
+  const monthPrefix = `${y}-${pad(m)}-`;
+  const compact = { month: monthPrefix, habits: data.habits, entries: {} };
+  for(const [d, arr] of Object.entries(data.entries)){ if(d.startsWith(monthPrefix)) compact.entries[d] = arr; }
+  const blob = new Blob([JSON.stringify(compact)],{type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `dotlog-widget-${monthPrefix}.json`; a.click(); URL.revokeObjectURL(a.href);
+};
+$('#clearBtn').onclick = ()=>{ if(confirm('Clear all data?')){ store.clear(); data = store.read(); renderLegend(); renderCalendar(); renderStats(); } };
+
+$('#prevBtn').onclick = ()=>shiftMonth(-1);
+$('#nextBtn').onclick = ()=>shiftMonth(1);
+monthPicker.onchange = ()=>{ renderCalendar(); renderStats(); };
+function shiftMonth(delta){
+  const [y,m] = monthPicker.value.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  monthPicker.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderCalendar(); renderStats();
+}
+
+// service worker
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+
+renderLegend(); renderCalendar(); renderStats();
+</script>
+</body>
+</html>
