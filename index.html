@@ -9,81 +9,104 @@
 <link rel="manifest" href="manifest.webmanifest">
 <style>
 :root{
-  --bg:#f7fbff; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --grid:#e2e8f0;
-  --accent:#0ea5e9; --danger:#ef4444;
+  --bg:#ffffff;           /* 전체 배경 */
+  --surface:#ffffff;      /* 카드/버튼 면 */
+  --ink:#1f2937;          /* 기본 글자 */
+  --muted:#6b7280;        /* 보조 글자 */
+  --line:#e5e7eb;         /* 경계선 */
+  --shadow:0 4px 18px rgba(0,0,0,.06);
+  --accent:#4D96FF;       /* 포인트 블루 */
+  --danger:#ef4444;
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0b1220; --card:#0f172a; --ink:#e2e8f0; --muted:#94a3b8; --grid:#1f2937;
-    --accent:#38bdf8; --danger:#ef4444;
-  }
-}
+
 *{box-sizing:border-box}
 html,body{
   margin:0;padding:0;background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji";
-  overflow-x:hidden; /* ✅ 가로 스크롤 방지 */
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden; /* 가로 스크롤 방지 */
 }
 .safe{padding:max(env(safe-area-inset-top),12px) 12px max(env(safe-area-inset-bottom),16px)}
+
 header{
-  position:sticky;top:0;z-index:10;
-  background:linear-gradient(var(--card), color-mix(in oklab, var(--card) 70%, transparent) 70%, transparent);
-  backdrop-filter:blur(8px); border-bottom:1px solid var(--grid)
+  position:sticky;top:0;z-index:10;background:var(--bg);
+  border-bottom:1px solid var(--line);
+  backdrop-filter:saturate(180%) blur(8px);
 }
-h1{font-size:18px;margin:0 0 8px 0}
+h1{font-size:18px;margin:0 0 6px 0;font-weight:700;letter-spacing:.2px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
 .controls input[type="month"]{
-  border:1px solid var(--grid);border-radius:10px;padding:8px 10px;background:var(--card);color:var(--ink);
-  min-width:180px; /* iOS에서 month 입력 넓이 고정 */
+  border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--surface);color:var(--ink);
+  min-width:180px;
+  box-shadow:var(--shadow);
 }
-button{border:1px solid var(--grid);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 10px;font-weight:600}
-.primary{background:var(--accent);color:#001827;border-color:var(--accent)}
-.card{background:var(--card);border:1px solid var(--grid);border-radius:14px;padding:12px;max-width:100%}
+
+button{
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:12px;padding:9px 12px;font-weight:600;
+  box-shadow:var(--shadow);
+}
+button:active{transform:translateY(1px)}
+.primary{background:var(--accent);color:#fff;border-color:transparent}
+.danger{background:var(--danger);color:#fff;border-color:transparent}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:16px;padding:12px;box-shadow:var(--shadow);
+  max-width:100%;
+}
 .legend{display:flex;flex-wrap:wrap;gap:8px}
-.legend-item{display:flex;align-items:center;gap:8px;border:1px dashed var(--grid);border-radius:999px;padding:6px 10px;background:var(--card)}
+.legend-item{
+  display:flex;align-items:center;gap:8px;border:1px dashed var(--line);
+  border-radius:999px;padding:6px 10px;background:var(--surface)
+}
 .dot{border-radius:50%;border:1px solid #0001}
 
-/* ✅ 달력: 화면 폭에 딱 맞게 7등분, 가로 스크롤 없음 */
+.tip{font-size:12px;color:var(--muted)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;max-width:100%}
+
+/* 달력: 7등분 고정, 한 화면에 꽉 차게 */
 .calendar{
   width:100%;
-  table-layout:fixed;      /* 칸 폭 자동 계산 */
+  table-layout:fixed;
   border-collapse:collapse;
 }
 .calendar th,.calendar td{
-  width:14.2857%;          /* 100% / 7 */
-  border:1px solid var(--grid);
-  padding:6px 4px;         /* 모바일 패딩 축소 */
+  width:14.2857%;
+  border:1px solid var(--line);
+  padding:8px 4px;
   vertical-align:top;
-  height:auto;
-  background:var(--card);
+  height:72px;          /* 요청: 세로 높이 충분히 */
+  background:var(--surface);
   position:relative;
   overflow-wrap:break-word;
 }
-.calendar th{background:color-mix(in oklab, var(--card), white 6%);font-size:12px}
+.calendar th{
+  background:#fafafa;
+  font-size:12px;font-weight:700;color:#111827;
+}
 .daynum{position:absolute;top:6px;right:6px;color:var(--muted);font-size:11px}
 .muted{color:var(--muted)}
-.spill{background:color-mix(in oklab, var(--card), black 4%)}
+.spill{background:#fcfcfc}
 
-/* ✅ 도트: 3개씩 줄바꿈, 크기 반응형 */
+/* 도트: 3개마다 줄바꿈 + 반응형 크기 */
 .dots{
   display:grid;
-  grid-template-columns:repeat(3, clamp(8px, 2.6vw, 14px)); /* 아이폰 폭에 맞게 */
-  gap:clamp(3px, 1.2vw, 6px);
-  margin-top:14px;
+  grid-template-columns:repeat(3, clamp(9px, 2.6vw, 14px));
+  gap:clamp(4px, 1.4vw, 6px);
+  margin-top:18px;
   align-content:start;
 }
 .dots .dot{
-  width:clamp(8px, 2.6vw, 14px);
-  height:clamp(8px, 2.6vw, 14px);
+  width:clamp(9px, 2.6vw, 14px);
+  height:clamp(9px, 2.6vw, 14px);
 }
 
-/* 버튼/툴바 줄바꿈 시 넘침 방지 */
-.tools{display:flex;gap:8px;flex-wrap:wrap;max-width:100%}
-
-/* 📱 iPhone 14 Pro 등 작은 화면 특화 */
+/* 작은 화면 튜닝 */
 @media (max-width:430px){
-  .calendar th,.calendar td{padding:5px 3px}
-  .daynum{top:4px;right:4px;font-size:10px}
+  .calendar th,.calendar td{padding:7px 3px}
+  .daynum{top:5px;right:5px;font-size:10px}
   h1{font-size:17px}
 }
 </style>
