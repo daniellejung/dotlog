@@ -1,12 +1,12 @@
-<!-- bump -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Dot Log — Local PWA</title>
-<meta name="theme-color" content="#0ea5e9">
+<title>Dot Log — Your daily routines</title>
+<meta name="theme-color" content="#4D96FF">
 <link rel="manifest" href="manifest.webmanifest">
+
 <style>
 :root{
   --bg:#ffffff;           /* 전체 배경 */
@@ -77,7 +77,7 @@ button:active{transform:translateY(1px)}
   border:1px solid var(--line);
   padding:8px 4px;
   vertical-align:top;
-  height:72px;          /* 요청: 세로 높이 충분히 */
+  height:72px;          /* 충분한 세로 높이 */
   background:var(--surface);
   position:relative;
   overflow-wrap:break-word;
@@ -90,18 +90,27 @@ button:active{transform:translateY(1px)}
 .muted{color:var(--muted)}
 .spill{background:#fcfcfc}
 
-/* 도트: 3개마다 줄바꿈 + 반응형 크기 */
+/* 도트: 3개마다 줄바꿈 + 더 큰 크기 */
 .dots{
   display:grid;
-  grid-template-columns:repeat(3, clamp(9px, 2.6vw, 14px));
-  gap:clamp(4px, 1.4vw, 6px);
-  margin-top:18px;
+  grid-template-columns:repeat(3, clamp(12px, 3.2vw, 18px));
+  gap:clamp(5px, 1.6vw, 8px);
+  margin-top:20px;
   align-content:start;
 }
 .dots .dot{
-  width:clamp(9px, 2.6vw, 14px);
-  height:clamp(9px, 2.6vw, 14px);
+  width:clamp(12px, 3.2vw, 18px);
+  height:clamp(12px, 3.2vw, 18px);
+  border-radius:50%; border:1px solid #0001;
 }
+
+/* Color swatches (routine add) */
+.swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:6px}
+.swatch{
+  width:36px;height:36px;border-radius:50%;
+  border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06);
+}
+.swatch.is-selected{outline:3px solid var(--accent); outline-offset:2px}
 
 /* 작은 화면 튜닝 */
 @media (max-width:430px){
@@ -109,8 +118,20 @@ button:active{transform:translateY(1px)}
   .daynum{top:5px;right:5px;font-size:10px}
   h1{font-size:17px}
 }
+
+/* Bottom sheets */
+.sheet{
+  position:fixed;left:0;right:0;bottom:-100%;
+  background:var(--surface);border-top-left-radius:16px;border-top-right-radius:16px;
+  box-shadow:0 -8px 24px rgba(0,0,0,.18);padding:12px;border:1px solid var(--line);
+  transition:bottom .25s ease;
+}
+.sheet.open{bottom:0}
+.sheet h3{margin:0 0 8px 0;font-size:16px}
+.grid{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
 </style>
 </head>
+
 <body>
 <header class="safe">
   <div class="row" style="justify-content:space-between;align-items:flex-start">
@@ -125,7 +146,7 @@ button:active{transform:translateY(1px)}
     </div>
   </div>
   <div class="tools" style="margin-top:8px">
-    <button id="addHabitBtn" class="primary">Add habit</button>
+    <button id="addRoutineBtn" class="primary">Add routine</button>
     <button id="exportBtn">Backup JSON</button>
     <button id="importBtn">Import JSON</button>
     <button id="widgetBtn">Export for Widget</button>
@@ -135,7 +156,7 @@ button:active{transform:translateY(1px)}
 
 <main class="safe" style="padding-top:12px">
   <section class="card">
-    <h2 style="font-size:16px;margin:0 0 8px 0">Habits</h2>
+    <h2 style="font-size:16px;margin:0 0 8px 0">Routines</h2>
     <div id="legend" class="legend"></div>
   </section>
 
@@ -153,15 +174,18 @@ button:active{transform:translateY(1px)}
   </section>
 </main>
 
+<!-- 날짜 입력 시트 -->
 <div id="sheet" class="sheet" aria-hidden="true">
   <h3 id="sheetTitle">Add entry</h3>
   <div class="grid">
-    <label for="selHabit">Habit</label>
-    <select id="selHabit"></select>
+    <label for="selRoutine">Routine</label>
+    <select id="selRoutine"
+      style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);color:var(--ink)"></select>
   </div>
   <div class="grid" style="margin-top:8px">
     <label for="selCount">Count</label>
-    <select id="selCount">
+    <select id="selCount"
+      style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);color:var(--ink)">
       <option value="1">1 time</option>
       <option value="2">2 times</option>
       <option value="3">3 times</option>
@@ -173,55 +197,99 @@ button:active{transform:translateY(1px)}
   </div>
 </div>
 
-<input id="fileInput" type="file" accept="application/json" class="hidden"/>
+<!-- 루틴 추가 시트 (이름 + 색상 칩) -->
+<div id="routineSheet" class="sheet" aria-hidden="true">
+  <h3 style="margin-bottom:10px">Add a routine</h3>
+  <div class="grid">
+    <label for="routineName">Name</label>
+    <input id="routineName" type="text" placeholder="e.g., Workout"
+           style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);color:var(--ink)">
+  </div>
+  <div class="grid" style="margin-top:10px">
+    <label>Color</label>
+    <div id="routineSwatches" class="swatches"></div>
+  </div>
+  <!-- 선택된 색을 저장 -->
+  <input id="routineColor" type="hidden" value="#4E6156">
+  <div class="row" style="margin-top:12px;justify-content:flex-end">
+    <button id="routineCancel">Cancel</button>
+    <button id="routineConfirm" class="primary">Add</button>
+  </div>
+</div>
+
+<input id="fileInput" type="file" accept="application/json" style="display:none"/>
 
 <script>
+/* ---------- Helpers ---------- */
 const $ = (s, r=document)=>r.querySelector(s);
 const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
 const pad = n => String(n).padStart(2,'0');
 
+/* ---------- Pastel Palette (hex only) ---------- */
+const PALETTE = [
+  "#4E6156","#9E7C74","#DFB0B1","#DFA95C","#CBCABD","#EAD3BF",
+  "#C1E7E3","#D6B7E1","#F6C49E","#B8C39C","#C5DAF1","#B8A899"
+];
+
+/* ---------- Store ---------- */
 const store = {
-  key: 'dotlog-local-v3',
+  key: 'dotlog-local-routines-v1',
   read(){
-    try{ return JSON.parse(localStorage.getItem(this.key)) || {habits:[], entries:{}} }catch(_){ return {habits:[], entries:{}} }
+    try{ return JSON.parse(localStorage.getItem(this.key)) || {routines:[], entries:{}} }catch(_){ return {routines:[], entries:{}} }
   },
   write(data){ localStorage.setItem(this.key, JSON.stringify(data)); },
   clear(){ localStorage.removeItem(this.key); }
 }
 let data = store.read();
 
+/* ---------- Elements ---------- */
 const monthPicker = $('#monthPicker');
 const cal = $('#calendar');
 const legend = $('#legend');
 const statsBox = $('#stats');
+
 const sheet = $('#sheet');
-const selHabit = $('#selHabit');
+const selRoutine = $('#selRoutine');
 const selCount = $('#selCount');
-const addHabitBtn = $('#addHabitBtn');
 const addBtn = $('#addBtn');
 const removeBtn = $('#removeBtn');
+
+const routineSheet = $('#routineSheet');
+const routineName = $('#routineName');
+const routineSwatches = $('#routineSwatches');
+const routineColor = $('#routineColor');
+const routineCancel = $('#routineCancel');
+const routineConfirm = $('#routineConfirm');
+
+const addRoutineBtn = $('#addRoutineBtn');
 const fileInput = $('#fileInput');
 
+/* ---------- Init Month Picker ---------- */
 const today = new Date();
 monthPicker.value = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
 
-function uuid(){ return 'h'+Math.random().toString(36).slice(2,10); }
-function addHabit(name, color){
-  data.habits.push({ id:uuid(), name, color, created:Date.now() });
-  store.write(data); renderLegend(); renderCalendar(); renderStats();
+/* ---------- Routines CRUD ---------- */
+function uuid(){ return 'r'+Math.random().toString(36).slice(2,10); }
+
+function addRoutine(name, color){
+  data.routines.push({ id:uuid(), name, color, created:Date.now() });
+  store.write(data);
+  renderLegend(); renderCalendar(); renderStats();
 }
-function deleteHabit(id){
+function deleteRoutine(id){
   for(const d of Object.keys(data.entries)){
-    data.entries[d] = (data.entries[d]||[]).filter(h=>h!==id);
+    data.entries[d] = (data.entries[d]||[]).filter(x=>x!==id);
     if(data.entries[d].length===0) delete data.entries[d];
   }
-  data.habits = data.habits.filter(h=>h.id!==id);
-  store.write(data); renderLegend(); renderCalendar(); renderStats();
+  data.routines = data.routines.filter(r=>r.id!==id);
+  store.write(data);
+  renderLegend(); renderCalendar(); renderStats();
 }
 
-function addEntry(date, habitId, count){
+/* ---------- Entries ---------- */
+function addEntry(date, routineId, count){
   const arr = data.entries[date] || [];
-  for(let i=0;i<count;i++) arr.push(habitId);
+  for(let i=0;i<count;i++) arr.push(routineId);
   data.entries[date] = arr;
   store.write(data);
 }
@@ -232,22 +300,24 @@ function removeLast(date){
   store.write(data);
 }
 
+/* ---------- Legend ---------- */
 function escapeHtml(str){return str.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
 function renderLegend(){
   legend.innerHTML = '';
-  if(!data.habits.length){ legend.innerHTML = '<div class="tip">No habits yet. Tap "Add habit".</div>'; return; }
-  for(const h of data.habits){
+  if(!data.routines.length){ legend.innerHTML = '<div class="tip">No routines yet. Tap "Add routine".</div>'; return; }
+  for(const r of data.routines){
     const el = document.createElement('div');
     el.className = 'legend-item';
-    el.innerHTML = `<span class="dot" style="background:${h.color}"></span><span>${escapeHtml(h.name)}</span>`;
+    el.innerHTML = `<span class="dot" style="width:14px;height:14px;background:${r.color}"></span><span>${escapeHtml(r.name)}</span>`;
     const del = document.createElement('button');
     del.textContent = 'Delete';
-    del.onclick = ()=>{ if(confirm('Delete this habit?')) deleteHabit(h.id); };
+    del.onclick = ()=>{ if(confirm('Delete this routine?')) deleteRoutine(r.id); };
     el.appendChild(del);
     legend.appendChild(el);
   }
 }
 
+/* ---------- Calendar ---------- */
 function ymd(d){ return d.toISOString().slice(0,10); }
 function monthGrid(year, month){ // month: 1..12
   const first = new Date(year, month-1, 1);
@@ -272,10 +342,10 @@ function renderCalendar(){
       const inMonth = (d.getMonth()+1)===m;
       const dateStr = ymd(d);
       const arr = data.entries[dateStr] || [];
-      const dots = arr.map(hid=>{
-        const h = data.habits.find(x=>x.id===hid);
-        const color = h ? h.color : '#ddd';
-        return `<span class="dot" title="${escapeHtml(h? h.name:'')}" style="background:${color}"></span>`;
+      const dots = arr.map(rid=>{
+        const r = data.routines.find(x=>x.id===rid);
+        const color = r ? r.color : '#ddd';
+        return `<span class="dot" title="${escapeHtml(r? r.name:'')}" style="background:${color}"></span>`;
       }).join('');
       return `<td class="${inMonth? '':'spill'}" data-date="${dateStr}">
         <span class="daynum ${inMonth?'':'muted'}">${d.getDate()}</span>
@@ -288,51 +358,93 @@ function renderCalendar(){
   $$('#calendar td').forEach(td=>{ td.onclick = ()=>openSheet(td.getAttribute('data-date')); });
 }
 
+/* ---------- Day Sheet ---------- */
 let currentDate = null;
 function openSheet(dateStr){
   currentDate = dateStr;
   $('#sheetTitle').textContent = `Add entry — ${dateStr}`;
-  selHabit.innerHTML = data.habits.map(h=>`<option value="${h.id}">${escapeHtml(h.name)}</option>`).join('');
-  if(!data.habits.length){
-    selHabit.innerHTML = `<option disabled>(add a habit first)</option>`;
-  }
+  selRoutine.innerHTML = data.routines.map(r=>`<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+  if(!data.routines.length){ selRoutine.innerHTML = `<option disabled>(add a routine first)</option>`; }
   sheet.classList.add('open'); sheet.setAttribute('aria-hidden','false');
 }
 function closeSheet(){ sheet.classList.remove('open'); sheet.setAttribute('aria-hidden','true'); }
 
 addBtn.onclick = ()=>{
-  if(!data.habits.length){ alert('Add a habit first.'); return; }
-  addEntry(currentDate, selHabit.value, Number(selCount.value));
+  if(!data.routines.length){ alert('Add a routine first.'); return; }
+  addEntry(currentDate, selRoutine.value, Number(selCount.value));
   renderCalendar(); renderStats(); closeSheet();
 };
 removeBtn.onclick = ()=>{ removeLast(currentDate); renderCalendar(); renderStats(); };
 
+// 스와이프로 닫기
 let startY=null;
 sheet.addEventListener('touchstart',e=>{ startY = e.touches[0].clientY; });
 sheet.addEventListener('touchmove',e=>{ if(startY!==null){ const dy=e.touches[0].clientY-startY; if(dy>30){ closeSheet(); startY=null; } } });
 
+/* ---------- Add Routine Sheet ---------- */
+function renderSwatches(){
+  routineSwatches.innerHTML = PALETTE.map(hex =>
+    `<button class="swatch" type="button" data-hex="${hex}" style="background:${hex}"></button>`
+  ).join('');
+  selectSwatch(routineColor.value || PALETTE[0]);
+  routineSwatches.querySelectorAll('.swatch').forEach(btn=>{
+    btn.onclick = ()=> selectSwatch(btn.dataset.hex);
+  });
+}
+function selectSwatch(hex){
+  routineColor.value = hex;
+  routineSwatches.querySelectorAll('.swatch').forEach(b=>b.classList.remove('is-selected'));
+  const active = Array.from(routineSwatches.children).find(b=>b.dataset.hex===hex);
+  if(active) active.classList.add('is-selected');
+}
+function openRoutineSheet(){
+  renderSwatches();
+  routineName.value = '';
+  routineSheet.classList.add('open');
+  routineSheet.setAttribute('aria-hidden','false');
+  setTimeout(()=>routineName.focus(),0);
+}
+function closeRoutineSheet(){
+  routineSheet.classList.remove('open');
+  routineSheet.setAttribute('aria-hidden','true');
+}
+routineConfirm.onclick = ()=>{
+  const name = (routineName.value||'').trim();
+  const color = routineColor.value || PALETTE[0];
+  if(!name){ alert('Please enter a routine name.'); return; }
+  addRoutine(name, color);
+  closeRoutineSheet();
+};
+routineCancel.onclick = ()=> closeRoutineSheet();
+let rsStartY=null;
+routineSheet.addEventListener('touchstart',e=>{ rsStartY = e.touches[0].clientY; });
+routineSheet.addEventListener('touchmove',e=>{ if(rsStartY!==null){ const dy=e.touches[0].clientY-rsStartY; if(dy>30){ closeRoutineSheet(); rsStartY=null; } } });
+
+/* ---------- Stats ---------- */
 function renderStats(){
   const [y,m] = monthPicker.value.split('-').map(Number);
   const monthPrefix = `${y}-${pad(m)}-`;
-  const countsByHabit = Object.fromEntries(data.habits.map(h=>[h.id,0]));
+  const countsByRoutine = Object.fromEntries(data.routines.map(r=>[r.id,0]));
   let activeDays = new Set();
   for(const [date, arr] of Object.entries(data.entries)){
     if(date.startsWith(monthPrefix)){
-      arr.forEach(hid => countsByHabit[hid]=(countsByHabit[hid]||0)+1);
+      arr.forEach(rid => countsByRoutine[rid]=(countsByRoutine[rid]||0)+1);
       if(arr.length) activeDays.add(date);
     }
   }
   const totalActiveDays = activeDays.size;
-  const lines = data.habits.map(h=>`• ${h.name}: ${countsByHabit[h.id]||0}`);
-  const totalDots = Object.entries(data.entries).filter(([d,_])=>d.startsWith(monthPrefix)).reduce((a,[_,arr])=>a+arr.length,0);
-  statsBox.innerHTML = lines.length? (`<div>${lines.join('<br>')}</div><div class="tip" style="margin-top:6px">Days active: ${totalActiveDays} · Total dots: ${totalDots}</div>`) : 'No data yet.';
+  const totalDots = Object.entries(data.entries)
+    .filter(([d,_])=>d.startsWith(monthPrefix))
+    .reduce((a,[_,arr])=>a+arr.length,0);
+
+  const lines = data.routines.map(r=>`• ${escapeHtml(r.name)}: ${countsByRoutine[r.id]||0}`);
+  statsBox.innerHTML = lines.length
+    ? (`<div>${lines.join('<br>')}</div><div class="tip" style="margin-top:6px">Days active: ${totalActiveDays} · Total dots: ${totalDots}</div>`)
+    : 'No data yet.';
 }
 
-addHabitBtn.onclick = ()=>{
-  const name = prompt('Habit name (e.g., Workout)'); if(!name) return;
-  const color = prompt('Color (hex like #22c55e)', '#22c55e') || '#22c55e';
-  addHabit(name.trim(), color.trim());
-};
+/* ---------- Toolbar actions ---------- */
+addRoutineBtn.onclick = openRoutineSheet;
 
 $('#exportBtn').onclick = ()=>{
   const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -343,15 +455,16 @@ $('#importBtn').onclick = ()=> fileInput.click();
 fileInput.onchange = async (e)=>{
   const f = e.target.files[0]; if(!f) return;
   const text = await f.text();
-  try{ const obj = JSON.parse(text);
-    if(obj && obj.habits && obj.entries){ data = obj; store.write(data); renderLegend(); renderCalendar(); renderStats(); alert('Imported.'); }
+  try{
+    const obj = JSON.parse(text);
+    if(obj && obj.routines && obj.entries){ data = obj; store.write(data); renderLegend(); renderCalendar(); renderStats(); alert('Imported.'); }
     else alert('Invalid file.');
   }catch(err){ alert('Invalid JSON.'); }
 };
 $('#widgetBtn').onclick = ()=>{
   const [y,m] = monthPicker.value.split('-').map(Number);
   const monthPrefix = `${y}-${pad(m)}-`;
-  const compact = { month: monthPrefix, habits: data.habits, entries: {} };
+  const compact = { month: monthPrefix, routines: data.routines, entries: {} };
   for(const [d, arr] of Object.entries(data.entries)){ if(d.startsWith(monthPrefix)) compact.entries[d] = arr; }
   const blob = new Blob([JSON.stringify(compact)],{type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -359,21 +472,23 @@ $('#widgetBtn').onclick = ()=>{
 };
 $('#clearBtn').onclick = ()=>{ if(confirm('Clear all data?')){ store.clear(); data = store.read(); renderLegend(); renderCalendar(); renderStats(); } };
 
+/* ---------- Month nav ---------- */
 $('#prevBtn').onclick = ()=>shiftMonth(-1);
 $('#nextBtn').onclick = ()=>shiftMonth(1);
 monthPicker.onchange = ()=>{ renderCalendar(); renderStats(); };
 function shiftMonth(delta){
   const [y,m] = monthPicker.value.split('-').map(Number);
   const d = new Date(y, m-1+delta, 1);
-  monthPicker.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  monthPicker.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
   renderCalendar(); renderStats();
 }
 
-// service worker
+/* ---------- PWA: service worker ---------- */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
 }
 
+/* ---------- Initial render ---------- */
 renderLegend(); renderCalendar(); renderStats();
 </script>
 </body>
